@@ -3,10 +3,14 @@ provider "aws" {
   profile = "default"
   default_tags {
     tags = {
-      Organisation = "asmigar"
+      Organisation = "Asmigar"
       Environment  = "dev"
     }
   }
+}
+
+data "http" "my_public_ip" {
+	url = "https://ipv4.icanhazip.com"
 }
 
 resource "aws_security_group" "allow_ssh" {
@@ -19,8 +23,7 @@ resource "aws_security_group" "allow_ssh" {
     from_port        = 22
     to_port          = 22
     protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
+    cidr_blocks      = ["${chomp(data.http.my_public_ip.response_body)}/32"]
   }
 
   ingress {
@@ -75,6 +78,24 @@ resource "aws_instance" "master" {
   vpc_security_group_ids = [aws_security_group.allow_ssh.id]
   subnet_id              = aws_subnet.public.id
   key_name               = aws_key_pair.this.key_name
+  user_data = <<-EOT
+		#!/bin/bash
+		# Installing Puppet Server/Master
+		apt-get update
+		wget https://apt.puppetlabs.com/puppet6-release-bionic.deb
+		dpkg -i puppet6-release-bionic.deb
+		apt update
+		apt-get install puppetserver
+
+		# Installing Puppet Development Kit for modules development
+		wget https://apt.puppet.com/puppet-tools-release-bionic.deb
+		dpkg -i puppet-tools-release-bionic.deb
+		apt-get update
+		apt-get install pdk
+
+		# Create entry for puppet master in /etc/hosts
+		echo "$(hostname -i) puppet" >> /etc/hosts
+		EOT
 }
 
 resource "aws_instance" "agents" {
