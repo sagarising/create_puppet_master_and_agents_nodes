@@ -128,6 +128,5 @@ resource "aws_instance" "agent" {
 		echo "${aws_instance.master.private_ip} puppet" >> /etc/hosts
 		echo -e "[main]\nserver=puppet" >> /etc/puppetlabs/puppet/puppet.conf
 		/opt/puppetlabs/bin/puppet resource service puppet ensure=running enable=true
-		systemctl restart puppet
 		EOT
 }
