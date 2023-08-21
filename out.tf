@@ -5,7 +5,7 @@ output "ssh_command_master_node" {
 
 output "ssh_command_agent_nodes" {
   value       = <<-SSHCOMMAND
-  %{for dns in aws_instance.agents[*].public_dns}
+  %{for dns in aws_instance.agent[*].public_dns}
   ssh -i ~/.ssh/${aws_key_pair.this.key_name}.pem ubuntu@${dns}
   %{endfor}
   SSHCOMMAND

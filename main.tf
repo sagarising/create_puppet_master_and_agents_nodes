@@ -85,20 +85,26 @@ resource "aws_instance" "master" {
 		wget https://apt.puppetlabs.com/puppet6-release-bionic.deb
 		dpkg -i puppet6-release-bionic.deb
 		apt update
-		apt-get install puppetserver
+		apt-get install -y puppetserver
 
 		# Installing Puppet Development Kit for modules development
 		wget https://apt.puppet.com/puppet-tools-release-bionic.deb
 		dpkg -i puppet-tools-release-bionic.deb
 		apt-get update
-		apt-get install pdk
+		apt-get install -y pdk
 
 		# Create entry for puppet master in /etc/hosts
 		echo "$(hostname -i) puppet" >> /etc/hosts
+
+		# Generate a root and intermediate signing CA for Puppet Server
+		/opt/puppetlabs/bin/puppetserver ca setup
+		sed -i.bak "s/-Xms2g -Xmx2g/-Xms512m -Xmx512m/" /etc/default/puppetserver
+		echo -e "[main]\nserver=puppet" >> /etc/puppetlabs/puppet/puppet.conf
+		systemctl start puppetserver
 		EOT
 }
 
-resource "aws_instance" "agents" {
+resource "aws_instance" "agent" {
   count         = var.agents
   ami           = var.image_id
   instance_type = "t2.micro"
@@ -110,4 +116,18 @@ resource "aws_instance" "agents" {
   vpc_security_group_ids = [aws_security_group.allow_ssh.id]
   subnet_id              = aws_subnet.public.id
   key_name               = aws_key_pair.this.key_name
+  user_data = <<-EOT
+		#!/bin/bash
+		# Installing Puppet Agent
+		apt-get update
+		wget https://apt.puppetlabs.com/puppet6-release-bionic.deb
+		dpkg -i puppet6-release-bionic.deb
+		apt update
+		apt-get install -y puppet-agent
+
+		echo "${aws_instance.master.private_ip} puppet" >> /etc/hosts
+		echo -e "[main]\nserver=puppet" >> /etc/puppetlabs/puppet/puppet.conf
+		/opt/puppetlabs/bin/puppet resource service puppet ensure=running enable=true
+		systemctl restart puppet
+		EOT
 }
